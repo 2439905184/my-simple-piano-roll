@@ -19,7 +19,7 @@
     <button onclick="deleteSelNote()">删除</button>
     <script>
         // todo：完成项目后换成testPlugin()这种风格命名变量和函数
-        var isDragging = false
+        var isMouseDown = false
         const canvas = document.getElementById('piano-roll');
         CanvasRenderingContext2D.prototype.drawLine = function(x1, y1, x2, y2) 
         {
@@ -34,6 +34,9 @@
         const note_height = 32 // 重构为grid_size = {"width","height"}
         var dragOffsetX = 0
         var dragOffsetY = 0
+
+        var mouseDownX = 0
+        var mouseDownY = 0
         // 要绘制的音符宽度
         var note_width = all_note_width
         var grid = 1
@@ -106,10 +109,12 @@
         }
         canvas.addEventListener('mousedown', function(e) 
         {
+            isMouseDown = true
             const rect = canvas.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
-            //console.log(x,y)
+            mouseDownX = x
+            mouseDownY = y
             // 检测按下的地方是否在音符内
             var hitResult = hit_test(x, y);
             if(hitResult && hitResult.hit)
@@ -117,7 +122,6 @@
                 selectedNoteIndex = hitResult.index
                 dragOffsetX = x - seq[selectedNoteIndex].x
                 dragOffsetY = y - seq[selectedNoteIndex].y
-                isDragging = false
             }
             else{
                 selectedNoteIndex = -1
@@ -137,7 +141,7 @@
             const rect = canvas.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
-            if(selectedNoteIndex >= 0 && isDragging)
+            if(selectedNoteIndex >= 0 && isMouseDown)
             {
                 var gridSpace = all_note_width / grid
                 var adjustedX = x - dragOffsetX
@@ -154,22 +158,11 @@
                 seq[selectedNoteIndex].y = snap(adjustedY,note_height)
                 redraw();
             }
-            else if(selectedNoteIndex >= 0 && !isDragging)
-            {
-                 // 计算鼠标当前位置与按下时位置的偏移量
-                const startX = seq[selectedNoteIndex].x + dragOffsetX;
-                const startY = seq[selectedNoteIndex].y + dragOffsetY;
-                const deltaX = Math.abs(x - startX);
-                const deltaY = Math.abs(y - startY);
-                if(deltaX >5 || deltaY > 5)
-                {
-                    isDragging = true
-                }
-            }
+            // console.log(isMouseDown)
         })
         canvas.addEventListener('mouseup', function(e) 
         {
-            isDragging = false
+            isMouseDown = false
             redraw()
         });
         function change_grid(type)
