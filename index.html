@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PianoRoll Demo</title>
+</head>
+<body>
+    <div>
+        吸附单位选择
+        <button onclick="change_grid('all')">全音符</button>
+        <button onclick="change_grid('two')">2分</button>
+        <button onclick="change_grid('four')">4分</button>
+        <button onclick="change_grid('eight')">8分</button>
+        <button onclick="change_grid('sixteen')">16分</button>
+    </div>
+    <canvas id="piano-roll" width="800" height="600"></canvas>
+    <button onclick="deleteSelNote()">删除</button>
+    <script>
+        // todo：完成项目后换成testPlugin()这种风格命名变量和函数
+        var isDragging = false
+        const canvas = document.getElementById('piano-roll');
+        CanvasRenderingContext2D.prototype.drawLine = function(x1, y1, x2, y2) 
+        {
+            this.beginPath();
+            this.moveTo(x1, y1);
+            this.lineTo(x2, y2);
+            this.stroke();
+        };
+        const ctx = canvas.getContext('2d');
+        var selectedNoteIndex = -1;
+        const all_note_width = 800
+        const note_height = 32 // 重构为grid_size = {"width","height"}
+        var dragOffsetX = 0
+        var dragOffsetY = 0
+        // 要绘制的音符宽度
+        var note_width = all_note_width
+        var grid = 1
+        var seq = []
+        redraw();
+        function snap(value,grid_space)
+        {
+            return Math.floor(value / grid_space) * grid_space;
+        }
+        function redraw_grid()
+        {
+            ctx.fillStyle = "#8c8c8c"
+            ctx.fillRect(0, 0, canvas.width, canvas.height)
+            ctx.fillStyle = "#000000"
+            ctx.lineWidth = 1
+                    // 绘制垂直网格线
+            const gridSpacing = all_note_width / grid;
+            for (let i = 0; i <= grid; i++) {
+                const x = i * gridSpacing;
+                ctx.drawLine(x, 0, x, canvas.height);
+            }
+                // 绘制水平线（钢琴键）
+            for (let i = 0; i < canvas.height / note_height; i++) {
+                const y = i * note_height;
+                ctx.drawLine(0, y, canvas.width, y);
+            }
+        }
+        function redraw()
+        {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = "#000000";
+            ctx.fillRect(0, 0, canvas.width, canvas.height,"#1e1e1e");
+            redraw_grid()
+            for(var i = 0; i < seq.length; i++)
+            {
+                if(selectedNoteIndex == i)
+                {
+                    ctx.fillStyle = "#00ff00"
+                }
+                else{
+                    ctx.fillStyle = "#ff0000"
+                }
+                ctx.fillRect(seq[i].x, seq[i].y, seq[i].width, seq[i].height)
+            }
+            
+        }
+        function hit_test(x,y)
+        {
+            // 从后往前检查，因为后绘制的音符在视觉上在顶层
+            for (let i = seq.length - 1; i >= 0; i--) 
+            {
+                const note = seq[i];
+                // 检查点是否在矩形区域内
+                if (x >= note.x && x <= note.x + note.width && y >= note.y && y <= note.y + note.height) 
+                {
+                    return { hit: true, index: i, note: note };
+                }
+            }
+            return { hit: false, index: -1, note: null };
+        }
+        function deleteSelNote()
+        {
+            if(selectedNoteIndex >= 0)
+            {
+                seq.splice(selectedNoteIndex, 1);
+                selectedNoteIndex = -1
+                console.log(seq)
+            }
+            redraw()
+        }
+        canvas.addEventListener('mousedown', function(e) 
+        {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            //console.log(x,y)
+            // 检测按下的地方是否在音符内
+            var hitResult = hit_test(x, y);
+            if(hitResult && hitResult.hit)
+            {
+                selectedNoteIndex = hitResult.index
+                dragOffsetX = x - seq[selectedNoteIndex].x
+                dragOffsetY = y - seq[selectedNoteIndex].y
+                isDragging = false
+            }
+            else{
+                selectedNoteIndex = -1
+                var grid_space = all_note_width / grid
+                seq.push({
+                    "x":snap(x,grid_space),
+                    "y":snap(y,note_height),
+                    "width":grid_space,
+                    "height":note_height
+                })
+            }
+            redraw();
+            console.log(seq)
+        });
+        canvas.addEventListener('mousemove', function(e) 
+        {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            if(selectedNoteIndex >= 0 && isDragging)
+            {
+                var gridSpace = all_note_width / grid
+                var adjustedX = x - dragOffsetX
+                var adjustedY = y - dragOffsetY
+                if(adjustedX < 0)
+                {
+                    adjustedX = 0
+                }
+                if(adjustedY < 0)
+                {
+                    adjustedY = 0
+                }
+                seq[selectedNoteIndex].x = snap(adjustedX,gridSpace)
+                seq[selectedNoteIndex].y = snap(adjustedY,note_height)
+                redraw();
+            }
+            else if(selectedNoteIndex >= 0 && !isDragging)
+            {
+                 // 计算鼠标当前位置与按下时位置的偏移量
+                const startX = seq[selectedNoteIndex].x + dragOffsetX;
+                const startY = seq[selectedNoteIndex].y + dragOffsetY;
+                const deltaX = Math.abs(x - startX);
+                const deltaY = Math.abs(y - startY);
+                if(deltaX >5 || deltaY > 5)
+                {
+                    isDragging = true
+                }
+            }
+        })
+        canvas.addEventListener('mouseup', function(e) 
+        {
+            isDragging = false
+            redraw()
+        });
+        function change_grid(type)
+        {
+            switch(type)
+            {
+                case 'all':
+                    note_width = all_note_width
+                    grid=1
+                    break;
+                case 'two':
+                    note_width = all_note_width / 2
+                    grid=2
+                    break;
+                case 'four':
+                    note_width = all_note_width / 4
+                    grid=4
+                    break;
+                case 'eight':
+                    note_width = all_note_width / 8
+                    grid=8
+                    break;
+                case "sixteen":
+                    note_width = all_note_width / 16
+                    grid=16
+                    break;
+            }
+            redraw()
+        }
+    </script>
+</body>
+</html>
