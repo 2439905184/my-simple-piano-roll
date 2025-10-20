@@ -130,12 +130,17 @@
             }
             const note = seq[selectedNoteIndex];
             // 检查是否点击在拉伸手柄上（音符右边缘附近）
-            if (x >= note.x + note.width - HANDLE_WIDTH && 
-                x <= note.x + note.width + HANDLE_WIDTH/2 &&
-                y >= note.y && 
-                y <= note.y + note.height) {
-                return true;
-            }
+            // if (x >= note.x + note.width - HANDLE_WIDTH && 
+            //     x <= note.x + note.width + HANDLE_WIDTH/2 &&
+            //     y >= note.y && 
+            //     y <= note.y + note.height) {
+            //     return true;
+            // }
+            if (x >= note.x + note.width - HANDLE_WIDTH/2 &&  x <= note.x + note.width + HANDLE_WIDTH/2 &&
+            y >= note.y && 
+            y <= note.y + note.height) {
+            return true;
+        }
             return false;
         }
         function deleteSelNote()
@@ -196,7 +201,18 @@
                 {
                     var newWidth = x - seq[selectedNoteIndex].x + dragOffsetX
                     // 确保音符宽度至少为一个网格单位
-                    newWidth = Math.max(gridSpace, snap(newWidth, gridSpace));
+                    //newWidth = Math.max(gridSpace, snap(newWidth, gridSpace));
+                    var maxX = canvas.width;
+                    //newWidth = Math.max(gridSpace, Math.min(canvas.width - seq[selectedNoteIndex].x, snap(newWidth, gridSpace)));
+                    //newWidth = Math.max(gridSpace, Math.min(canvas.width - seq[selectedNoteIndex].x, snap(newWidth, gridSpace)));
+                    // 应用捕捉并限制在有效范围内
+    newWidth = Math.max(
+        gridSpace, 
+        Math.min(
+            maxX - seq[selectedNoteIndex].x, 
+            Math.round(newWidth / gridSpace) * gridSpace
+        )
+    );
                     seq[selectedNoteIndex].width = newWidth;
                     redraw();
                 }
