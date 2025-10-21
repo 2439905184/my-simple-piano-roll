@@ -15,16 +15,28 @@
         <button onclick="change_grid('eight')">8分</button>
         <button onclick="change_grid('sixteen')">16分</button>
         拉伸音符<input type="checkbox" onchange="changeStretch(this)">
+        <!-- <button onclick="addPattern(this)">创建新旋律片段+</button> -->
+        <button onclick="delSelPattern()">清空选中的旋律片段</button>
+    </div>
+    <div id="pattern-list" style="width: 800px;overflow-y: auto;white-space: nowrap;">
+        旋律片段
+        <!-- <button onclick="selPattern(this)">1</button> -->
     </div>
     <canvas id="piano-roll" width="800" height="600"></canvas>
     <button onclick="deleteSelNote()">删除</button>
     <script>
         // todo：完成项目后换成testPlugin()这种风格命名变量和函数
+        const PatternList = document.getElementById('pattern-list');//uiPatternList
+        var pattern = []
+        var selPatternIndex = -1
         const HANDLE_WIDTH = 8 // 拉伸手柄的宽度
         var isNoteStretch = false
         var isMouseDown = false
         var isStretching = false
-
+        document.addEventListener('contextmenu',function(e)
+        {
+            e.preventDefault();
+        })
         const canvas = document.getElementById('piano-roll');
         CanvasRenderingContext2D.prototype.drawLine = function(x1, y1, x2, y2) 
         {
@@ -44,9 +56,26 @@
         var mouseDownY = 0
         // 要绘制的音符宽度
         var note_width = all_note_width
-        var grid = 1
+        var grid = 16
+        // 每个小节的音符序列
         var seq = []
-        redraw();
+        /*seq
+        {
+            "x":0,
+            "y":0,
+            "width":0,
+        }
+        */
+        function initUI()
+        {
+            for(var i = 0; i < 512; i++)
+            {
+                addPattern(i)
+            }
+            selPattern(PatternList.children[0])
+            redraw();
+        }
+        initUI()
         function snap(value,grid_space)
         {
             return Math.floor(value / grid_space) * grid_space;
@@ -185,9 +214,11 @@
                     "width":grid_space,
                     "height":note_height
                 })
+                pattern[selPatternIndex].seq = seq
+                console.log(pattern[selPatternIndex])
             }
             redraw();
-            console.log(seq)
+            //console.log(seq)
         });
         canvas.addEventListener('mousemove', function(e) 
         {
@@ -228,6 +259,12 @@
                     {
                         adjustedY = 0
                     }
+                    //console.log(adjustedX)
+                    //这里需要防止音符超出右侧画布
+                    /*if(adjustedX + seq[selectedNoteIndex].width > canvas.width)
+                    {
+                        seq[selectedNoteIndex].x = canvas.width - seq[selectedNoteIndex].width
+                    }*/
                     seq[selectedNoteIndex].x = snap(adjustedX,gridSpace)
                     seq[selectedNoteIndex].y = snap(adjustedY,note_height)
                     redraw();
@@ -266,12 +303,53 @@
                     grid=16
                     break;
             }
+            if(selPatternIndex >=0 && pattern[selPatternIndex])
+            {
+                pattern[selPatternIndex].grid = grid
+            }
             redraw()
         }
         function changeStretch(checkbox)
         {
             isNoteStretch = checkbox.checked
             //console.log(isNoteStretch)
+        }
+        function addPattern(self)
+        {
+            pattern.push({
+                "grid":16,
+                "seq":[]
+            })
+            var btn = document.createElement('button')
+            btn.innerHTML = pattern.length
+            btn.onclick = function(){selPattern(btn)}
+            PatternList.appendChild(btn)
+        }
+        function delSelPattern()
+        {
+            pattern[selPatternIndex] = {}
+        }
+        function selPattern(self)
+        {
+            for(var i=0;i<PatternList.children.length;i++)
+            {
+                PatternList.children[i].style = ""
+            }
+            self.style = "background-color: orange;"
+            selPatternIndex = self.innerHTML -1
+            if(pattern[selPatternIndex] && pattern[selPatternIndex].grid !=undefined )
+            {
+                grid = pattern[selPatternIndex].grid
+            }
+            seq = []
+            redraw()
+            seq = pattern[selPatternIndex].seq
+            redraw()
+        }
+        // 把音符序序列的宽度转换为音符单位
+        function convertSeqMusicStyle()
+        {
+
         }
     </script>
 </body>
