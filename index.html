@@ -23,7 +23,7 @@
         <!-- <button onclick="selPattern(this)">1</button> -->
     </div>
     <canvas id="piano-roll" width="800" height="600"></canvas>
-    <button onclick="deleteSelNote()">删除</button>
+    <button onclick="delSelNote()">删除</button>
     <script>
         // todo：完成项目后换成testPlugin()这种风格命名变量和函数
         const PatternList = document.getElementById('pattern-list');//uiPatternList
@@ -158,13 +158,6 @@
                 return false;
             }
             const note = seq[selectedNoteIndex];
-            // 检查是否点击在拉伸手柄上（音符右边缘附近）
-            // if (x >= note.x + note.width - HANDLE_WIDTH && 
-            //     x <= note.x + note.width + HANDLE_WIDTH/2 &&
-            //     y >= note.y && 
-            //     y <= note.y + note.height) {
-            //     return true;
-            // }
             if (x >= note.x + note.width - HANDLE_WIDTH/2 &&  x <= note.x + note.width + HANDLE_WIDTH/2 &&
             y >= note.y && 
             y <= note.y + note.height) {
@@ -172,13 +165,14 @@
         }
             return false;
         }
-        function deleteSelNote()
+        function delSelNote()
         {
             if(selectedNoteIndex >= 0)
             {
                 seq.splice(selectedNoteIndex, 1);
                 selectedNoteIndex = -1
                 console.log(seq)
+                pattern[selPatternIndex].seq = [...seq]
             }
             redraw()
         }
@@ -214,8 +208,8 @@
                     "width":grid_space,
                     "height":note_height
                 })
-                pattern[selPatternIndex].seq = seq
-                console.log(pattern[selPatternIndex])
+                pattern[selPatternIndex].seq = [...seq]
+                //console.log(pattern[selPatternIndex])
             }
             redraw();
             //console.log(seq)
@@ -245,6 +239,7 @@
         )
     );
                     seq[selectedNoteIndex].width = newWidth;
+                    pattern[selPatternIndex].seq = [...seq]
                     redraw();
                 }
                 else{
@@ -267,6 +262,7 @@
                     }*/
                     seq[selectedNoteIndex].x = snap(adjustedX,gridSpace)
                     seq[selectedNoteIndex].y = snap(adjustedY,note_height)
+                    pattern[selPatternIndex].seq = [...seq]
                     redraw();
                 }
             }
@@ -327,7 +323,9 @@
         }
         function delSelPattern()
         {
-            pattern[selPatternIndex] = {}
+            seq = []
+            pattern[selPatternIndex].seq = [];
+            redraw()
         }
         function selPattern(self)
         {
@@ -341,9 +339,13 @@
             {
                 grid = pattern[selPatternIndex].grid
             }
-            seq = []
-            redraw()
-            seq = pattern[selPatternIndex].seq
+            if(pattern[selPatternIndex] && pattern[selPatternIndex].seq)
+            {
+                seq = [...pattern[selPatternIndex].seq];
+            }
+            else{
+                seq = []
+            }
             redraw()
         }
         // 把音符序序列的宽度转换为音符单位
