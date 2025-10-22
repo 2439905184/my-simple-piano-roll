@@ -27,6 +27,21 @@
     <script>
         // todo：完成项目后换成testPlugin()这种风格命名变量和函数
         const PatternList = document.getElementById('pattern-list');//uiPatternList
+        var selectedNoteIndex = -1;
+        const all_note_width = 800
+        const note_height = 32 // 重构为grid_size = {"width","height"}
+        //一个音阶，0表示白键，1表示黑键
+        const melody_scale = [0,1,0,1,0,0,1,0,1,0,1,0]
+        const keyWidth = 64;
+        var dragOffsetX = 0
+        var dragOffsetY = 0
+        var mouseDownX = 0
+        var mouseDownY = 0
+        // 要绘制的音符宽度
+        var note_width = all_note_width
+        var grid = 16
+        // 每个小节的音符序列
+        var seq = []
         var pattern = []
         var selPatternIndex = -1
         const HANDLE_WIDTH = 8 // 拉伸手柄的宽度
@@ -38,13 +53,6 @@
             e.preventDefault();
         })
         const canvas = document.getElementById('piano-roll');
-        const scrollbarCanvas = document.getElementById('vertical-scrollbar');
-        const scrollbarCtx = scrollbarCanvas.getContext('2d');
-        const scrollbarSliderHeight = 20
-        var scrollbarUiData = {
-            "y":0,
-            "isMouseDown":false
-        }
         CanvasRenderingContext2D.prototype.drawLine = function(x1, y1, x2, y2) 
         {
             this.beginPath();
@@ -59,29 +67,26 @@
             "green":"#008000"
         }
         const ctx = canvas.getContext('2d');
-        var selectedNoteIndex = -1;
-        const all_note_width = 800
-        const note_height = 32 // 重构为grid_size = {"width","height"}
-        var dragOffsetX = 0
-        var dragOffsetY = 0
-
-        var mouseDownX = 0
-        var mouseDownY = 0
-        // 要绘制的音符宽度
-        var note_width = all_note_width
-        var grid = 16
-        // 每个小节的音符序列
-        var seq = []
-        /*seq
-        {
-            "x":0,
+        const scrollbarCanvas = document.getElementById('vertical-scrollbar');
+        const scrollbarCtx = scrollbarCanvas.getContext('2d');
+        const scrollbarSliderHeight = 20
+        var scrollbarUiData = {
             "y":0,
-            "width":0,
+            "isMouseDown":false
         }
-        */
-        //一个音阶，0表示白键，1表示黑键
-        const melody_scale = [0,1,0,1,0,0,1,0,1,0,1,0]
-        const keyWidth = 64;
+        const TOTAL_OCTAVES = 7; //C1-C8
+        const NOTES_PER_OCTAVE = 12;
+        const TOTAL_NOTES = TOTAL_OCTAVES * NOTES_PER_OCTAVE;
+        var scrollOffset = 0;
+        const maxScrollOffset = (TOTAL_NOTES * note_height) - canvas.height;
+        
+        var full_keyboard_map = [];
+        for(var octave=0;octave<TOTAL_OCTAVES;octave++)
+        {
+            full_keyboard_map.push(...melody_scale)
+        }
+        
+        
         function initUI()
         {
             for(var i = 0; i < 512; i++)
@@ -98,40 +103,49 @@
         }
         function redrawKey()
         {
-            for(var i = 0; i < melody_scale.length; i++)
+            for(var i = 0; i < TOTAL_NOTES; i++)
             {
-                var canvasY = musicToCanvasY(i*note_height)
-                if(melody_scale[i] == 0)
+                var canvasY = musicToCanvasY(i*note_height) - scrollOffset;
+                if(canvasY + note_height < 0 || canvasY > canvas.height) continue;                
+                if(full_keyboard_map[i] === 0)
                 {
-                    ctx.fillStyle = Color.white
+                    ctx.fillStyle = Color.white;
                 }
                 else{
-                    ctx.fillStyle = Color.black
+                    ctx.fillStyle = Color.black;
                 }
-                ctx.fillRect(0, canvasY, keyWidth, note_height)
-                ctx.strokeRect(0, canvasY, keyWidth, note_height)
+                ctx.fillRect(0, canvasY, keyWidth, note_height);
+                ctx.strokeRect(0, canvasY, keyWidth, note_height);
+                // 检查是否为 C 音（每个八度的第一个音）
+                if(i % 12 === 0) {
+                    const octaveNumber = Math.floor(i / 12) + 1; // C1, C2, ..., C8
+                    const noteName = "C" + octaveNumber;
+                    ctx.fillStyle = Color.black;
+                    ctx.font = "14px Arial";
+                    const textY = canvasY + note_height / 2 + 5;
+                    ctx.fillText(noteName, keyWidth - ctx.measureText(noteName).width - 5, textY);
+                }
             }
-            ctx.fillStyle = Color.black
-            ctx.font = "20px Arial"
-            var textY = canvasY + note_height / 2
-            ctx.fillText("C4", keyWidth-ctx.measureText("C4").width, canvas.height);
+             
+            
         }
         function redrawGrid()
         {
             //这里应该从下往上绘制
-            for(var i = 0; i < melody_scale.length; i++)
+            for(var i = 0; i < TOTAL_NOTES; i++)
             {
-                var canvasY = musicToCanvasY(i*note_height)
-                if(melody_scale[i] == 0)
+                var canvasY = musicToCanvasY(i*note_height) - scrollOffset;
+                // 只绘制可见区域内的网格
+                if(canvasY + note_height < 0 || canvasY > canvas.height) continue;
+                if(full_keyboard_map[i] === 0)
                 {
-                    ctx.fillStyle = Color.white
+                    ctx.fillStyle = Color.white;
                 }
                 else{
-                    ctx.fillStyle = Color.grey
+                    ctx.fillStyle = Color.grey;
                 }
                 ctx.fillRect(keyWidth, canvasY, canvas.width-keyWidth, note_height)
             }
-            ctx.fillStyle = (0,0,canvas.width,canvas.height)
             ctx.fillStyle = "#000000"
             ctx.lineWidth = 1
                     // 绘制垂直网格线
@@ -141,9 +155,13 @@
                 ctx.drawLine(x, 0, x, canvas.height);
             }
                 // 绘制水平线（钢琴键）
-            for (let i = 0; i <= canvas.height / note_height; i++) {
-                const y = i * note_height;
-                ctx.drawLine(keyWidth, y, canvas.width, y);
+            for (let i = 0; i <= TOTAL_NOTES; i++) {
+                const y = musicToCanvasY(i * note_height) - scrollOffset;
+                // 只绘制可见区域内的线
+                if(y >= 0 && y <= canvas.height) {
+                    ctx.drawLine(keyWidth, y, canvas.width, y);
+                }
+                //ctx.drawLine(keyWidth, y, canvas.width, y);
             }
         }
         function redrawScrollbar()
@@ -151,8 +169,14 @@
             scrollbarCtx.clearRect(0, 0, scrollbarCanvas.width, scrollbarCanvas.height);
             scrollbarCtx.fillStyle = Color.black;
             scrollbarCtx.fillRect(0, 0, scrollbarCanvas.width, scrollbarCanvas.height);
+              // 计算滚动条拇指的位置
+            const scrollbarRatio = scrollOffset / maxScrollOffset;
+            scrollbarUiData.y = scrollbarRatio * (scrollbarCanvas.height - scrollbarSliderHeight);
+            
             scrollbarCtx.fillStyle = Color.green;
             scrollbarCtx.fillRect(0, scrollbarUiData.y, scrollbarCanvas.width, scrollbarSliderHeight);   
+            //scrollbarCtx.fillStyle = Color.green;
+            //scrollbarCtx.fillRect(0, scrollbarUiData.y, scrollbarCanvas.width, scrollbarSliderHeight);   
         }
         function redraw()
         {
@@ -162,7 +186,11 @@
             redrawScrollbar()
             for(var i = 0; i < seq.length; i++)
             {
-                var noteX = seq[i].x + keyWidth
+                var noteX = seq[i].x + keyWidth;
+                var noteY = musicToCanvasY(seq[i].y) - scrollOffset;
+                 // 只绘制可见区域内的音符
+                if(noteY + seq[i].height < 0 || noteY > canvas.height) continue;
+
                 if(selectedNoteIndex == i)
                 {
                     ctx.fillStyle = "#00ff00"
@@ -180,7 +208,6 @@
                          seq[i].height - 4);
                 }
             }
-            
         }
         function hitTest(x,y)
         {
@@ -229,15 +256,6 @@
             }
             return false;
         }
-        //绿色手指
-        function hitTestVScrollbarSlider(x,y)
-        {
-            if (y >= scrollbarUiData.y && y <= scrollbarUiData.y + scrollbarSliderHeight) 
-            {scrollbarUiData.isMouseDown = true}
-            else{
-                return false;
-            }
-        }
         function delSelNote()
         {
             if(selectedNoteIndex >= 0)
@@ -262,7 +280,6 @@
             if(isNoteStretch && selectedNoteIndex>=0 && hitTestHandle(x,y))
             {
                 isStretching = true
-                //dragOffsetX = x - (seq[selectedNoteIndex].x + seq[selectedNoteIndex].width);
                 dragOffsetX = gridX - (seq[selectedNoteIndex].x + seq[selectedNoteIndex].width);
                 return
             }
@@ -271,13 +288,11 @@
             if(hitResult && hitResult.hit)
             {
                 selectedNoteIndex = hitResult.index
-                // dragOffsetX = x - seq[selectedNoteIndex].x
                 dragOffsetX = gridX - seq[selectedNoteIndex].x
                 dragOffsetY = y - seq[selectedNoteIndex].y
             }
             else{
                 selectedNoteIndex = -1
-                
                 if(x >= keyWidth && x < canvas.width)
                 {
                     var grid_space = all_note_width / grid
@@ -303,7 +318,6 @@
                 var gridSpace = all_note_width / grid
                 if(isStretching)
                 {
-                    //var newWidth = x - seq[selectedNoteIndex].x + dragOffsetX
                     var newWidth = gridX - seq[selectedNoteIndex].x + dragOffsetX;
                     // 确保音符宽度至少为一个网格单位
                     //newWidth = Math.max(gridSpace, snap(newWidth, gridSpace));
@@ -362,15 +376,34 @@
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
             scrollbarUiData.isMouseDown = true;
-            if (y >= scrollbarUiData.y && y <= scrollbarUiData.y + scrollbarSliderHeight) 
+            // 计算滚动条比例
+            const scrollbarRatio = scrollOffset / maxScrollOffset;
+            const thumbPosition = scrollbarRatio * (scrollbarCanvas.height - scrollbarSliderHeight);
+            if (y >= thumbPosition && y <= thumbPosition + scrollbarSliderHeight) 
             {
                 // 记录点击位置相对于拇指顶部的偏移
-                scrollbarUiData.dragOffset = y - scrollbarUiData.y;
+                scrollbarUiData.dragOffset = y - thumbPosition;
             } else {
                 // 点击在滚动条轨道上，直接跳转到该位置
-                scrollbarUiData.y = clamp(y - scrollbarSliderHeight / 2, 0, scrollbarCanvas.height - scrollbarSliderHeight);
+                const newThumbPosition = Math.max(0, Math.min(scrollbarCanvas.height - scrollbarSliderHeight, y - scrollbarSliderHeight / 2));
+                scrollbarUiData.y = newThumbPosition;
                 scrollbarUiData.dragOffset = scrollbarSliderHeight / 2;
+                
+                // 更新 scrollOffset
+                const ratio = newThumbPosition / (scrollbarCanvas.height - scrollbarSliderHeight);
+                scrollOffset = ratio * maxScrollOffset;
             }
+            // if (y >= scrollbarUiData.y && y <= scrollbarUiData.y + scrollbarSliderHeight) 
+            // {
+            //     // 记录点击位置相对于拇指顶部的偏移
+            //     scrollbarUiData.dragOffset = y - scrollbarUiData.y;
+            // } else {
+            //     // 点击在滚动条轨道上，直接跳转到该位置
+
+            //     scrollbarUiData.y = clamp(y - scrollbarSliderHeight / 2, 0, scrollbarCanvas.height - scrollbarSliderHeight);
+            //     scrollbarUiData.dragOffset = scrollbarSliderHeight / 2;
+            // }
+            redraw()
             redrawScrollbar()
         })
         scrollbarCanvas.addEventListener('mouseup', function(e) 
@@ -387,8 +420,14 @@
                 const y = e.clientY - rect.top;
                 
                 // 根据拖拽偏移计算新的拇指位置
-                scrollbarUiData.y = clamp(y - scrollbarUiData.dragOffset, 0, scrollbarCanvas.height - scrollbarSliderHeight);
+                //scrollbarUiData.y = clamp(y - scrollbarUiData.dragOffset, 0, scrollbarCanvas.height - scrollbarSliderHeight);
+                const newThumbPosition = Math.max(0, Math.min(scrollbarCanvas.height - scrollbarSliderHeight, y - scrollbarUiData.dragOffset));
+                scrollbarUiData.y = newThumbPosition;
                 
+                // 更新 scrollOffset
+                const ratio = newThumbPosition / (scrollbarCanvas.height - scrollbarSliderHeight);
+                scrollOffset = ratio * maxScrollOffset;
+                redraw()
                 redrawScrollbar();
             }
         })
@@ -476,12 +515,17 @@
 
         }
         // 修改绘制函数，将音乐坐标转换为Canvas坐标
+        function canvasToMusicY(canvasY)
+        {
+            return canvas.height - canvasY - note_height;
+        }
         function musicToCanvasY(musicY) 
         {
             // musicY: 音乐坐标（低音=0，高音=大值）
             // canvas.height: Canvas总高度
             // note_height: 每个音符的高度
-            return canvas.height - musicY - note_height;
+           // return canvas.height - musicY - note_height;
+           return (TOTAL_NOTES * note_height)-musicY-note_height;
         }
     </script>
 </body>
