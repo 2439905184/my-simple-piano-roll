@@ -1,28 +1,24 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PianoRoll Demo</title>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PianoRoll Demo</title>
 </head>
-<body>
-    <div>
-        吸附单位选择
-        <button onclick="change_grid('all')">全音符</button>
-        <button onclick="change_grid('two')">2分</button>
-        <button onclick="change_grid('four')">4分</button>
-        <button onclick="change_grid('eight')">8分</button>
-        <button onclick="change_grid('sixteen')">16分</button>
-        拉伸音符<input type="checkbox" onchange="changeStretch(this)">
-                <button onclick="delSelPattern()">清空选中的旋律片段</button>
-        <button onclick="delSelNote()">删除选中的音符</button>
-    </div>
-    <div id="pattern-list" style="width: 800px;overflow-y: auto;white-space: nowrap;">
-        旋律片段
-    </div>
-    <canvas id="piano-roll" width="864" height="384"></canvas>
-    <canvas id="vertical-scrollbar" width="40" height="384"></canvas>
+<body><div>吸附单位选择
+        <button onclick="change_grid('all')">全音符</button>
+        <button onclick="change_grid('two')">2分</button>
+        <button onclick="change_grid('four')">4分</button>
+        <button onclick="change_grid('eight')">8分</button>
+        <button onclick="change_grid('sixteen')">16分</button>
+        拉伸音符<input type="checkbox" onchange="changeStretch(this)">
+        <button onclick="delSelPattern()">清空选中的旋律片段</button>
+        <button onclick="delSelNote()">删除选中的音符</button>
+    </div>
+    <div id="pattern-list" style="width: 800px;overflow-y: auto;white-space: nowrap;">旋律片段</div>
+    <canvas id="piano-roll" width="864" height="384"></canvas>
+    <canvas id="vertical-scrollbar" width="40" height="384"></canvas>
     <script>
         // todo：完成项目后换成testPlugin()这种风格命名变量和函数
         const PatternList = document.getElementById('pattern-list');//uiPatternList
