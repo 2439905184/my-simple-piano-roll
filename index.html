@@ -198,12 +198,12 @@
                 else{
                     ctx.fillStyle = "#ff0000"
                 }
-                ctx.fillRect(noteX, seq[i].y, seq[i].width, seq[i].height)
+                ctx.fillRect(noteX, noteY, seq[i].width, seq[i].height)
                 if(isNoteStretch && selectedNoteIndex ==i)
                 {
                     ctx.fillStyle = "#008800"
                     ctx.fillRect(noteX + seq[i].width - HANDLE_WIDTH/2, 
-                         seq[i].y + 2, 
+                         noteY + 2, 
                          HANDLE_WIDTH, 
                          seq[i].height - 4);
                 }
@@ -220,11 +220,12 @@
             if (isNoteStretch && selectedNoteIndex >= 0) {
                 const note = seq[selectedNoteIndex];
                 var noteScreenX = note.x + keyWidth
+                var noteScreenY = musicToCanvasY(note.y) - scrollOffset;
                 // 检查是否点击在拉伸手柄上
                 if (x >= noteScreenX + note.width - HANDLE_WIDTH/2 && 
                     x <= noteScreenX + note.width + HANDLE_WIDTH/2 &&
-                    y >= note.y && 
-                    y <= note.y + note.height) {
+                    y >= noteScreenY && 
+                    y <= noteScreenY + note.height) {
                     // 点击在手柄上，不处理为音符点击
                     return { hit: false, index: -1, note: null };
                 }
@@ -234,8 +235,9 @@
             {
                 const note = seq[i];
                 var noteScreenX = note.x + keyWidth
+                var noteScreenY = musicToCanvasY(note.y) - scrollOffset;
                 // 检查点是否在矩形区域内
-                if (x >= noteScreenX && x <= noteScreenX + note.width && y >= note.y && y <= note.y + note.height) 
+                if (x >= noteScreenX && x <= noteScreenX + note.width && y >= noteScreenY && y <= noteScreenY + note.height) 
                 {
                     return { hit: true, index: i, note: note };
                 }
@@ -250,7 +252,8 @@
             }
             const note = seq[selectedNoteIndex];
             var noteScreenX = note.x + keyWidth;
-            if (x >= noteScreenX + note.width - HANDLE_WIDTH/2 &&  x <= noteScreenX + note.width + HANDLE_WIDTH/2 &&y >= note.y && y <= note.y + note.height) 
+            var noteScreenY = musicToCanvasY(note.y) - scrollOffset;
+            if (x >= noteScreenX + note.width - HANDLE_WIDTH/2 &&  x <= noteScreenX + note.width + HANDLE_WIDTH/2 &&y >= noteScreenY && y <= noteScreenY + note.height) 
             {
                 return true;
             }
@@ -287,22 +290,24 @@
             var hitResult = hitTest(x, y);
             if(hitResult && hitResult.hit)
             {
-                selectedNoteIndex = hitResult.index
-                dragOffsetX = gridX - seq[selectedNoteIndex].x
-                dragOffsetY = y - seq[selectedNoteIndex].y
+                selectedNoteIndex = hitResult.index;
+                dragOffsetX = gridX - seq[selectedNoteIndex].x;
+                dragOffsetY = y - (musicToCanvasY(seq[selectedNoteIndex].y) - scrollOffset);
             }
             else{
                 selectedNoteIndex = -1
                 if(x >= keyWidth && x < canvas.width)
                 {
                     var grid_space = all_note_width / grid
+                    // 修复音符创建逻辑
+                    var musicY = canvasToMusicY(y + scrollOffset);
                     seq.push({
-                    "x":snap(gridX,grid_space),
-                    "y":snap(y,note_height),
-                    "width":grid_space,
-                    "height":note_height
-                })
-                pattern[selPatternIndex].seq = [...seq]
+                        "x":snap(gridX,grid_space),
+                        "y":snap(musicY,note_height),
+                        "width":grid_space,
+                        "height":note_height
+                    })
+                    pattern[selPatternIndex].seq = [...seq]
                 }
             }
             redraw();
@@ -319,8 +324,6 @@
                 if(isStretching)
                 {
                     var newWidth = gridX - seq[selectedNoteIndex].x + dragOffsetX;
-                    // 确保音符宽度至少为一个网格单位
-                    //newWidth = Math.max(gridSpace, snap(newWidth, gridSpace));
                     var maxX = canvas.width;
                     // 应用捕捉并限制在有效范围内
                     newWidth = Math.max(
@@ -335,10 +338,9 @@
                     redraw();
                 }
                 else{
-                    // 处理音符移动
-                    //var adjustedX = x - dragOffsetX
                     var adjustedX = gridX - dragOffsetX
-                    var adjustedY = y - dragOffsetY
+                    // 修复音符移动逻辑
+                    var adjustedY = canvasToMusicY((y - dragOffsetY) + scrollOffset)
                     if(adjustedX < 0)
                     {
                         adjustedX = 0
@@ -347,18 +349,12 @@
                     {
                         adjustedY = 0
                     }
-                    //这里需要防止音符超出右侧画布
-                    /*if(adjustedX + seq[selectedNoteIndex].width > canvas.width)
-                    {
-                        seq[selectedNoteIndex].x = canvas.width - seq[selectedNoteIndex].width
-                    }*/
                     seq[selectedNoteIndex].x = snap(adjustedX,gridSpace)
                     seq[selectedNoteIndex].y = snap(adjustedY,note_height)
                     pattern[selPatternIndex].seq = [...seq]
                     redraw();
                 }
             }
-            // console.log(isMouseDown)
         })
         canvas.addEventListener('mouseup', function(e) 
         {
@@ -393,16 +389,6 @@
                 const ratio = newThumbPosition / (scrollbarCanvas.height - scrollbarSliderHeight);
                 scrollOffset = ratio * maxScrollOffset;
             }
-            // if (y >= scrollbarUiData.y && y <= scrollbarUiData.y + scrollbarSliderHeight) 
-            // {
-            //     // 记录点击位置相对于拇指顶部的偏移
-            //     scrollbarUiData.dragOffset = y - scrollbarUiData.y;
-            // } else {
-            //     // 点击在滚动条轨道上，直接跳转到该位置
-
-            //     scrollbarUiData.y = clamp(y - scrollbarSliderHeight / 2, 0, scrollbarCanvas.height - scrollbarSliderHeight);
-            //     scrollbarUiData.dragOffset = scrollbarSliderHeight / 2;
-            // }
             redraw()
             redrawScrollbar()
         })
@@ -420,7 +406,6 @@
                 const y = e.clientY - rect.top;
                 
                 // 根据拖拽偏移计算新的拇指位置
-                //scrollbarUiData.y = clamp(y - scrollbarUiData.dragOffset, 0, scrollbarCanvas.height - scrollbarSliderHeight);
                 const newThumbPosition = Math.max(0, Math.min(scrollbarCanvas.height - scrollbarSliderHeight, y - scrollbarUiData.dragOffset));
                 scrollbarUiData.y = newThumbPosition;
                 
@@ -435,6 +420,13 @@
         {
             scrollbarUiData.isMouseDown = false
         })
+        // 添加鼠标滚轮支持
+        canvas.addEventListener('wheel', function(e) {
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? 20 : -20;
+            scrollOffset = Math.max(0, Math.min(maxScrollOffset, scrollOffset + delta));
+            redraw();
+        });
         function change_grid(type)
         {
             switch(type)
@@ -469,7 +461,6 @@
         function changeStretch(checkbox)
         {
             isNoteStretch = checkbox.checked
-            //console.log(isNoteStretch)
         }
         function addPattern(self)
         {
@@ -517,15 +508,13 @@
         // 修改绘制函数，将音乐坐标转换为Canvas坐标
         function canvasToMusicY(canvasY)
         {
-            return canvas.height - canvasY - note_height;
+            // 将Canvas坐标转换为音乐坐标（考虑滚动）
+            return (TOTAL_NOTES * note_height) - canvasY - note_height;
         }
         function musicToCanvasY(musicY) 
         {
             // musicY: 音乐坐标（低音=0，高音=大值）
-            // canvas.height: Canvas总高度
-            // note_height: 每个音符的高度
-           // return canvas.height - musicY - note_height;
-           return (TOTAL_NOTES * note_height)-musicY-note_height;
+            return (TOTAL_NOTES * note_height) - musicY - note_height;
         }
     </script>
 </body>
