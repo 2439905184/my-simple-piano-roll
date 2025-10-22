@@ -21,10 +21,9 @@
     </div>
     <div id="pattern-list" style="width: 800px;overflow-y: auto;white-space: nowrap;">
         旋律片段
-        <!-- <button onclick="selPattern(this)">1</button> -->
     </div>
     <canvas id="piano-roll" width="864" height="384"></canvas>
-    
+    <canvas id="vertical-scrollbar" width="20" height="384"></canvas>
     <script>
         // todo：完成项目后换成testPlugin()这种风格命名变量和函数
         const PatternList = document.getElementById('pattern-list');//uiPatternList
@@ -39,6 +38,13 @@
             e.preventDefault();
         })
         const canvas = document.getElementById('piano-roll');
+        const scrollbarCanvas = document.getElementById('vertical-scrollbar');
+        const scrollbarCtx = scrollbarCanvas.getContext('2d');
+        const scrollbarSliderHeight = 20
+        var scrollbarUiData = {
+            "y":0,
+            "isMouseDown":false
+        }
         CanvasRenderingContext2D.prototype.drawLine = function(x1, y1, x2, y2) 
         {
             this.beginPath();
@@ -49,7 +55,8 @@
         const Color = {
             "black": "#000000",
             "white": "#ffffff",
-            "grey": "#808080"
+            "grey": "#808080",
+            "green":"#008000"
         }
         const ctx = canvas.getContext('2d');
         var selectedNoteIndex = -1;
@@ -139,11 +146,20 @@
                 ctx.drawLine(keyWidth, y, canvas.width, y);
             }
         }
+        function redrawScrollbar()
+        {
+            scrollbarCtx.clearRect(0, 0, scrollbarCanvas.width, scrollbarCanvas.height);
+            scrollbarCtx.fillStyle = Color.black;
+            scrollbarCtx.fillRect(0, 0, scrollbarCanvas.width, scrollbarCanvas.height);
+            scrollbarCtx.fillStyle = Color.green;
+            scrollbarCtx.fillRect(0, scrollbarUiData.y, scrollbarCanvas.width, scrollbarSliderHeight);   
+        }
         function redraw()
         {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             redrawGrid()
             redrawKey()
+            redrawScrollbar()
             for(var i = 0; i < seq.length; i++)
             {
                 var noteX = seq[i].x + keyWidth
@@ -212,6 +228,15 @@
                 return true;
             }
             return false;
+        }
+        //绿色手指
+        function hitTestVScrollbarSlider(x,y)
+        {
+            if (y >= scrollbarUiData.y && y <= scrollbarUiData.y + scrollbarSliderHeight) 
+            {scrollbarUiData.isMouseDown = true}
+            else{
+                return false;
+            }
         }
         function delSelNote()
         {
@@ -327,6 +352,50 @@
             isStretching = false
             redraw()
         });
+        function clamp(value,min,max)
+        {
+            return Math.min(Math.max(value,min),max)
+        }
+        scrollbarCanvas.addEventListener('mousedown', function(e) 
+        {
+            const rect = scrollbarCanvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            scrollbarUiData.isMouseDown = true;
+            if (y >= scrollbarUiData.y && y <= scrollbarUiData.y + scrollbarSliderHeight) 
+            {
+                // 记录点击位置相对于拇指顶部的偏移
+                scrollbarUiData.dragOffset = y - scrollbarUiData.y;
+            } else {
+                // 点击在滚动条轨道上，直接跳转到该位置
+                scrollbarUiData.y = clamp(y - scrollbarSliderHeight / 2, 0, scrollbarCanvas.height - scrollbarSliderHeight);
+                scrollbarUiData.dragOffset = scrollbarSliderHeight / 2;
+            }
+            redrawScrollbar()
+        })
+        scrollbarCanvas.addEventListener('mouseup', function(e) 
+        {
+            scrollbarUiData.isMouseDown = false
+        })
+        scrollbarCanvas.addEventListener('mousemove', function(e) 
+        {
+            const rect = scrollbarCanvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            if (scrollbarUiData.isMouseDown) {
+                const rect = scrollbarCanvas.getBoundingClientRect();
+                const y = e.clientY - rect.top;
+                
+                // 根据拖拽偏移计算新的拇指位置
+                scrollbarUiData.y = clamp(y - scrollbarUiData.dragOffset, 0, scrollbarCanvas.height - scrollbarSliderHeight);
+                
+                redrawScrollbar();
+            }
+        })
+        scrollbarCanvas.addEventListener('mouseleave',function(e)
+        {
+            scrollbarUiData.isMouseDown = false
+        })
         function change_grid(type)
         {
             switch(type)
