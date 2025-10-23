@@ -461,7 +461,16 @@
         }
         function updateGridCount()
         {
-            grid = paiziSettings.fenzi / paiziSettings.fenmu * snapDanwei
+            // 对三连音做特殊处理
+            if(snapDanwei == 3 || snapDanwei == 6 ||snapDanwei == 12 || snapDanwei == 24 || snapDanwei == 48)
+            {
+                grid = paiziSettings.fenzi * snapDanwei
+            }
+            else
+            {
+                grid = paiziSettings.fenzi / paiziSettings.fenmu * snapDanwei
+            }
+            grid = Math.ceil(grid)
         }
         function changeStretch(checkbox)
         {
