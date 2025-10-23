@@ -13,7 +13,7 @@
 </head>
 <body>
     <div>吸附单位选择
-        <select onchange="change_grid(this.value)">
+        <select onchange="changeGrid(this.value)">
             <option value="1">1/1(节拍)</option>
             <option value="2">1/2</option>
             <option value="4">1/4</option>
@@ -36,8 +36,8 @@
         框选<input type="checkbox" onchange="changeSelectMode(this)"/>
         <button onclick="delSelPattern()">清空选中的旋律片段</button>
         <button onclick="delSelNote()">删除选中的音符</button>
-        拍号设置(分子/分母)<input class="piazi" type="number" value="4" onchange="changeBeatFenzi(this)">
-        <input class="piazi" type="number" value="4" onchange="changeBeatFenmu(this)">
+        拍号设置(分子/分母)<input class="piazi" type="number" min="1" value="4" onchange="changeBeatFenzi(this)">
+        <input class="piazi" type="number" min="1" value="4" onchange="changeBeatFenmu(this)">
     </div>
     <div id="pattern-list" style="width: 800px;overflow-y: auto;white-space: nowrap;">旋律片段</div>
     <canvas id="piano-roll" width="864" height="384"></canvas>
@@ -45,6 +45,7 @@
     <script>
         // todo：完成项目后换成testPlugin()这种风格命名变量和函数
         var paiziSettings = {"fenzi":4, "fenmu":4}
+        var snapDanwei = 4
         const PatternList = document.getElementById('pattern-list');//uiPatternList
         var selectedNoteIndex = -1;
         const all_note_width = 800
@@ -448,38 +449,20 @@
             scrollOffset = Math.max(0, Math.min(maxScrollOffset, scrollOffset + delta));
             redraw();
         });
-        function change_grid(type)
+        function changeGrid(p_number)
         {
-            //console.log(type)
-            switch(type)
-            {
-                case 'all':
-                    note_width = all_note_width
-                    grid=1
-                    break;
-                case 'two':
-                    note_width = all_note_width / 2
-                    grid=2
-                    break;
-                case 'four':
-                    note_width = all_note_width / 4
-                    grid=4
-                    break;
-                case 'eight':
-                    note_width = all_note_width / 8
-                    grid=8
-                    break;
-                case "sixteen":
-                    note_width = all_note_width / 16
-                    grid=16
-                    break;
-            }
+            snapDanwei = p_number
+            updateGridCount()
             if(selPatternIndex >=0 && pattern[selPatternIndex])
             {
                 pattern[selPatternIndex].grid = grid
             }
-            redraw()
+            redrawGrid()
         }
+        function updateGridCount()
+        {
+            grid = paiziSettings.fenzi / paiziSettings.fenmu * snapDanwei
+        }
         function changeStretch(checkbox)
         {
             isNoteStretch = checkbox.checked
@@ -542,10 +525,14 @@
         function changeBeatFenzi(self)
         {
             paiziSettings.fenzi = self.value
+            updateGridCount()
+            redrawGrid()
         }
         function changeBeatFenmu(self)
         {
             paiziSettings.fenmu = self.value
+            updateGridCount()
+            redrawGrid()
         }
     </script>
 </body>
