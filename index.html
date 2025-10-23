@@ -5,22 +5,46 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PianoRoll Demo</title>
+    <style>
+        .piazi{
+            width: 25px;
+        }
+    </style>
 </head>
-<body><div>吸附单位选择
-        <button onclick="change_grid('all')">全音符</button>
-        <button onclick="change_grid('two')">2分</button>
-        <button onclick="change_grid('four')">4分</button>
-        <button onclick="change_grid('eight')">8分</button>
-        <button onclick="change_grid('sixteen')">16分</button>
+<body>
+    <div>吸附单位选择
+        <select onchange="change_grid(this.value)">
+            <option value="1">1/1(节拍)</option>
+            <option value="2">1/2</option>
+            <option value="4">1/4</option>
+            <option value="8">1/8</option>
+            <option value="16">1/16</option>
+            <option value="32">1/32</option>
+            <option value="64">1/64</option>
+            <option value="3">1/3（三连音）</option>
+            <option value="6">1/6（三连音）</option>
+            <option value="12">1/12（三连音）</option>
+            <option value="24">1/24（三连音）</option>
+            <option value="48">1/48（三连音）</option>
+        </select>
+        乐器选择
+        <select>
+            <option value="piano">钢琴</option>
+            <option value="guitar">吉他</option>
+        </select>
         拉伸音符<input type="checkbox" onchange="changeStretch(this)">
+        框选<input type="checkbox" onchange="changeSelectMode(this)"/>
         <button onclick="delSelPattern()">清空选中的旋律片段</button>
         <button onclick="delSelNote()">删除选中的音符</button>
+        拍号设置(分子/分母)<input class="piazi" type="number" value="4" onchange="changeBeatFenzi(this)">
+        <input class="piazi" type="number" value="4" onchange="changeBeatFenmu(this)">
     </div>
     <div id="pattern-list" style="width: 800px;overflow-y: auto;white-space: nowrap;">旋律片段</div>
     <canvas id="piano-roll" width="864" height="384"></canvas>
     <canvas id="vertical-scrollbar" width="40" height="384"></canvas>
     <script>
         // todo：完成项目后换成testPlugin()这种风格命名变量和函数
+        var paiziSettings = {"fenzi":4, "fenmu":4}
         const PatternList = document.getElementById('pattern-list');//uiPatternList
         var selectedNoteIndex = -1;
         const all_note_width = 800
@@ -426,6 +450,7 @@
         });
         function change_grid(type)
         {
+            //console.log(type)
             switch(type)
             {
                 case 'all':
@@ -514,6 +539,14 @@
             // musicY: 音乐坐标（低音=0，高音=大值）
             return (TOTAL_NOTES * note_height) - musicY - note_height;
         }
+        function changeBeatFenzi(self)
+        {
+            paiziSettings.fenzi = self.value
+        }
+        function changeBeatFenmu(self)
+        {
+            paiziSettings.fenmu = self.value
+        }
     </script>
 </body>
 </html>
