@@ -428,6 +428,7 @@
                 for (let i = 0; i < seq.length; i++) {
                     if (isNoteInRectSelection(i)) {
                         selectedNoteIndices.push(i);
+                        console.log(selectedNoteIndices)
                     }
                 }
                 
@@ -455,7 +456,8 @@
                     redraw();
                 }
                 else{
-                    var adjustedX = gridX - dragOffsetX
+                    moveSelectedNotes(x,y,gridSpace)
+                   /* var adjustedX = gridX - dragOffsetX
                     // 修复音符移动逻辑：同样先吸附画布Y坐标，再转换
                     var canvasY_top_abs = (y - dragOffsetY) + scrollOffset;
                     var canvasY_snapped = snap(canvasY_top_abs, note_height);
@@ -474,7 +476,7 @@
                     seq[selectedNoteIndex].x = snap(adjustedX,gridSpace)
                     seq[selectedNoteIndex].y = adjustedY_snapped // 直接使用转换后的坐标
                     pattern[selPatternIndex].seq = [...seq]
-                    redraw();
+                    redraw();*/
                 }
             }
         })
@@ -670,6 +672,67 @@
                 pattern[selPatternIndex] = {...copyedPatternData}
                 seq = [...pattern[selPatternIndex].seq]
                 redraw()
+            }
+        }
+        // 新增函数：处理选中音符的移动（单个或多个）
+        function moveSelectedNotes(mouseX, mouseY, gridSpace) {
+            // 计算鼠标的相对移动量
+            var gridX = mouseX - keyWidth;
+            var adjustedX = gridX - dragOffsetX;
+            // 修复音符移动逻辑：同样先吸附画布Y坐标，再转换
+            var canvasY_top_abs = (mouseY - dragOffsetY) + scrollOffset;
+            var canvasY_snapped = snap(canvasY_top_abs, note_height);
+            var adjustedY_snapped = canvasToMusicY(canvasY_snapped);
+            
+            // 如果是单个音符选中
+            if (selectedNoteIndex >= 0 && selectedNoteIndices.length === 0) {
+                moveSingleNote(selectedNoteIndex, adjustedX, adjustedY_snapped, gridSpace);
+            } 
+            // 如果是多个音符选中
+            else if (selectedNoteIndices.length > 0) {
+                moveMultipleNotes(adjustedX, adjustedY_snapped, gridSpace);
+            }
+            console.log(selectedNoteIndices)
+            pattern[selPatternIndex].seq = [...seq];
+            redraw();
+        }
+        // 移动单个音符
+        function moveSingleNote(noteIndex, adjustedX, adjustedY, gridSpace) {
+            // 限制X坐标范围
+            if (adjustedX < 0) adjustedX = 0;
+            if (adjustedX + seq[noteIndex].width > canvas.width - keyWidth) {
+                adjustedX = canvas.width - keyWidth - seq[noteIndex].width;
+            }
+            
+            seq[noteIndex].x = snap(adjustedX, gridSpace);
+            seq[noteIndex].y = adjustedY; // 直接使用转换后的坐标
+        }
+
+        // 移动多个音符
+        function moveMultipleNotes(adjustedX, adjustedY, gridSpace) {
+            // 计算第一个选中音符的原始位置和新位置的偏移量
+            const firstNote = seq[selectedNoteIndices[0]];
+            const offsetX = adjustedX - firstNote.x;
+            const offsetY = adjustedY - firstNote.y;
+            
+            // 移动所有选中的音符
+            for (let i = 0; i < selectedNoteIndices.length; i++) {
+                const noteIndex = selectedNoteIndices[i];
+                const note = seq[noteIndex];
+                
+                // 计算新位置
+                let newX = note.x + offsetX;
+                let newY = note.y + offsetY;
+                
+                // 限制X坐标范围
+                if (newX < 0) newX = 0;
+                if (newX + note.width > canvas.width - keyWidth) {
+                    newX = canvas.width - keyWidth - note.width;
+                }
+                
+                // 应用网格对齐
+                note.x = snap(newX, gridSpace);
+                note.y = newY;
             }
         }
     </script>
