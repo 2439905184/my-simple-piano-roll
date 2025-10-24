@@ -14,11 +14,12 @@
 <body>
     拍号设置(分子/分母)<input class="piazi" type="number" min="1" value="4" onchange="changeBeatFenzi(this)">
     <input class="piazi" type="number" min="1" value="4" onchange="changeBeatFenmu(this)">
-    乐器选择
+    <!-- 这里是考虑到移植安卓作曲软件里的问题 -->
+    <!-- 乐器选择
     <select>
         <option value="piano">钢琴</option>
         <option value="guitar">吉他</option>
-    </select>
+    </select> -->
     <div>吸附单位选择
         <select onchange="changeGrid(this.value)">
             <option value="1">1/1(节拍)</option>
@@ -85,7 +86,7 @@
         var isNoteStretch = false
         var isMouseDown = false
         var isStretching = false
-        var dragNoteIndex = -1; // 【修复】新增：正在拖动的音符索引
+        var dragNoteIndex = -1; // 正在拖动或拉伸的音符索引（锚点）
         document.addEventListener('contextmenu',function(e)
         {
             e.preventDefault();
@@ -221,8 +222,10 @@
                  // 只绘制可见区域内的音符
                 if(noteY + seq[i].height < 0 || noteY > canvas.height) continue;
 
+                const isSelected = selectedNoteIndex == i || selectedNoteIndices.includes(i); 
+
                 // 检查是否被选中（单选或多选）
-                if(selectedNoteIndex == i || selectedNoteIndices.includes(i))
+                if(isSelected)
                 {
                     ctx.fillStyle = "#00ff00"
                 }
@@ -230,7 +233,9 @@
                     ctx.fillStyle = "#ff0000"
                 }
                 ctx.fillRect(noteX, noteY, seq[i].width, seq[i].height)
-                if(isNoteStretch && selectedNoteIndex ==i)
+                
+                // 绘制拉伸手柄 (如果启用拉伸且音符被选中)
+                if(isNoteStretch && isSelected)
                 {
                     ctx.fillStyle = "#008800"
                     ctx.fillRect(noteX + seq[i].width - HANDLE_WIDTH/2, 
@@ -263,20 +268,6 @@
             {
                 return { hit: false, index: -1, note: null };
             }
-            // 如果启用了拉伸且有选中的音符，优先检查是否点击在手柄上
-            if (isNoteStretch && selectedNoteIndex >= 0) {
-                const note = seq[selectedNoteIndex];
-                var noteScreenX = note.x + keyWidth
-                var noteScreenY = musicToCanvasY(note.y) - scrollOffset;
-                // 检查是否点击在拉伸手柄上
-                if (x >= noteScreenX + note.width - HANDLE_WIDTH/2 && 
-                    x <= noteScreenX + note.width + HANDLE_WIDTH/2 &&
-                    y >= noteScreenY && 
-                    y <= noteScreenY + note.height) {
-                    // 点击在手柄上，不处理为音符点击
-                    return { hit: false, index: -1, note: null };
-                }
-            }
             // 从后往前检查，因为后绘制的音符在视觉上在顶层
             for (let i = seq.length - 1; i >= 0; i--) 
             {
@@ -291,20 +282,41 @@
             }
             return { hit: false, index: -1, note: null };
         }
+        // 检查是否点击在音符拉伸手柄上，返回被点击的音符索引，否则返回 -1
         function hitTestHandle(x,y)
         {
-            if(!isNoteStretch || selectedNoteIndex < 0)
-            {
-                return false;
+            if(!isNoteStretch) return -1;
+
+            // 确定要检查的音符列表
+            let indicesToCheck = [];
+            if (selectedNoteIndex >= 0 && selectedNoteIndices.length === 0) {
+                // 单选模式
+                indicesToCheck.push(selectedNoteIndex);
+            } else if (selectedNoteIndices.length > 0) {
+                // 多选模式
+                indicesToCheck = selectedNoteIndices;
+            } else {
+                return -1; // 没有音符被选中
             }
-            const note = seq[selectedNoteIndex];
-            var noteScreenX = note.x + keyWidth;
-            var noteScreenY = musicToCanvasY(note.y) - scrollOffset;
-            if (x >= noteScreenX + note.width - HANDLE_WIDTH/2 && x <= noteScreenX + note.width + HANDLE_WIDTH/2 &&y >= noteScreenY && y <= noteScreenY + note.height) 
-            {
-                return true;
+            
+             // 从后往前检查，优先检测视觉上在顶层的音符
+             for (let i = seq.length - 1; i >= 0; i--) {
+                if (indicesToCheck.includes(i)) {
+                    const note = seq[i];
+                    var noteScreenX = note.x + keyWidth;
+                    var noteScreenY = musicToCanvasY(note.y) - scrollOffset;
+                    // 检查是否点击在拉伸手柄上
+                    if (x >= noteScreenX + note.width - HANDLE_WIDTH/2 && 
+                        x <= noteScreenX + note.width + HANDLE_WIDTH/2 &&
+                        y >= noteScreenY && 
+                        y <= noteScreenY + note.height) 
+                    {
+                        // 返回被点击的音符索引作为锚点
+                        return i; 
+                    }
+                }
             }
-            return false;
+            return -1;
         }
         // 检查音符是否在框选区域内
         function isNoteInRectSelection(noteIndex) {
@@ -324,14 +336,26 @@
         }
         function delSelNote()
         {
+            // ... (保持不变)
             if(selectedNoteIndex >= 0)
             {
                 seq.splice(selectedNoteIndex, 1);
                 selectedNoteIndex = -1
-                dragNoteIndex = -1; // 【修复】删除时重置
+                dragNoteIndex = -1; 
                 console.log(seq)
                 pattern[selPatternIndex].seq = [...seq]
             }
+            // 【新增】删除多选音符
+            if (selectedNoteIndices.length > 0) {
+                // 从后往前删除，避免索引变化问题
+                selectedNoteIndices.sort((a, b) => b - a).forEach(index => {
+                    seq.splice(index, 1);
+                });
+                selectedNoteIndices = [];
+                dragNoteIndex = -1;
+                pattern[selPatternIndex].seq = [...seq];
+            }
+
             redraw()
         }
         canvas.addEventListener('mousedown', function(e) 
@@ -345,6 +369,18 @@
             mouseDownY = y
             var gridX = x -keyWidth
             
+            // 检查是否点击在拉伸手柄上
+            const handleIndex = hitTestHandle(x,y); 
+            if(handleIndex >= 0)
+            {
+                isStretching = true
+                // 使用被点击的音符作为拉伸锚点
+                dragNoteIndex = handleIndex; 
+                // dragOffsetX 用于计算新宽度
+                dragOffsetX = gridX - (seq[dragNoteIndex].x + seq[dragNoteIndex].width);
+                return
+            }
+
             // 如果启用框选模式且点击在音符区域
             if (isRectSelectMode && x >= keyWidth) {
                 isRectSelecting = true;
@@ -358,18 +394,12 @@
                     // 清除之前的选择
                     selectedNoteIndex = -1;
                     selectedNoteIndices = [];
-                    dragNoteIndex = -1; // 【修复】清空拖动索引
+                    dragNoteIndex = -1; 
                 }
                 redraw();
                 return;
             }
             
-            if(isNoteStretch && selectedNoteIndex>=0 && hitTestHandle(x,y))
-            {
-                isStretching = true
-                dragOffsetX = gridX - (seq[selectedNoteIndex].x + seq[selectedNoteIndex].width);
-                return
-            }
             // 【修复】重写音符命中逻辑
             var hitResult = hitTest(x, y);
             if(hitResult && hitResult.hit)
@@ -407,7 +437,7 @@
             else{
                 selectedNoteIndex = -1
                 selectedNoteIndices = []; // 清除多选
-                dragNoteIndex = -1; // 【修复】清空拖动索引
+                dragNoteIndex = -1; // 清空拖动索引
                 if(x >= keyWidth && x < canvas.width)
                 {
                     var grid_space = all_note_width / grid
@@ -451,25 +481,13 @@
                 return;
             }
             
-            // 【修复】拖动条件：检查 dragNoteIndex
+            // 拖动/拉伸逻辑
             if ((selectedNoteIndex >= 0 || selectedNoteIndices.length > 0) && isMouseDown && dragNoteIndex >= 0)
             {
                 var gridSpace = all_note_width / grid
                 if(isStretching)
                 {
-                    var newWidth = gridX - seq[selectedNoteIndex].x + dragOffsetX;
-                    var maxX = canvas.width;
-                    // 应用捕捉并限制在有效范围内
-                    newWidth = Math.max(
-                        gridSpace, 
-                        Math.min(
-                            maxX - seq[selectedNoteIndex].x - keyWidth, 
-                            Math.round(newWidth / gridSpace) * gridSpace
-                        )
-                    );
-                    seq[selectedNoteIndex].width = newWidth;
-                    pattern[selPatternIndex].seq = [...seq]
-                    redraw();
+                    stretchSelectedNotes(gridX, gridSpace); // 调用新的拉伸函数
                 }
                 else{
                     moveSelectedNotes(x,y,gridSpace)
@@ -480,7 +498,7 @@
         {
             isMouseDown = false
             isStretching = false
-            dragNoteIndex = -1; // 【修复】抬起鼠标时重置拖动索引
+            dragNoteIndex = -1; // 抬起鼠标时重置拖动/拉伸索引
             
             // 完成框选
             if (isRectSelecting) {
@@ -491,8 +509,6 @@
                     selectedNoteIndex = -1; 
                 }
                 
-                // 【修复】移除框选结束后设置 dragOffsetX/Y 的代码，让下次 mousedown 处理拖动逻辑
-                
                 redraw();
             }
         });
@@ -502,6 +518,7 @@
         }
         scrollbarCanvas.addEventListener('mousedown', function(e) 
         {
+            // ... (保持不变)
             const rect = scrollbarCanvas.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
@@ -563,6 +580,7 @@
         });
         function changeGrid(p_number)
         {
+            // ... (保持不变)
             snapDanwei = p_number
             updateGridCount()
             if(selPatternIndex >=0 && pattern[selPatternIndex])
@@ -573,6 +591,7 @@
         }
         function updateGridCount()
         {
+            // ... (保持不变)
             // 对三连音做特殊处理
             if(snapDanwei == 3 || snapDanwei == 6 ||snapDanwei == 12 || snapDanwei == 24 || snapDanwei == 48)
             {
@@ -587,9 +606,11 @@
         function changeStretch(checkbox)
         {
             isNoteStretch = checkbox.checked
+            redraw() // 刷新以显示/隐藏拉伸手柄
         }
         function addPattern(self)
         {
+            // ... (保持不变)
             pattern.push({
                 "grid":16,
                 "seq":[]
@@ -602,12 +623,14 @@
         }
         function delSelPattern()
         {
+            // ... (保持不变)
             seq = []
             pattern[selPatternIndex].seq = [];
             redraw()
         }
         function selPattern(self)
         {
+            // ... (保持不变)
             for(var i=0;i<PatternList.children.length;i++)
             {
                 PatternList.children[i].style = ""
@@ -630,38 +653,44 @@
         // 把音符序序列的宽度转换为音符单位
         function convertSeqMusicStyle()
         {
-
+            // ... (保持不变)
         }
         // 修改绘制函数，将音乐坐标转换为Canvas坐标
         function canvasToMusicY(canvasY)
         {
+            // ... (保持不变)
             // 将Canvas坐标转换为音乐坐标（考虑滚动）
             //return (TOTAL_NOTES * note_height) - canvasY - note_height;
             return (TOTAL_NOTES * note_height) - canvasY - note_height // - scrollOffset;
         }
         function musicToCanvasY(musicY) 
         {
+            // ... (保持不变)
             // musicY: 音乐坐标（低音=0，高音=大值）
             return (TOTAL_NOTES * note_height) - musicY - note_height;
         }
         function changeBeatFenzi(self)
         {
+            // ... (保持不变)
             paiziSettings.fenzi = self.value
             updateGridCount()
             redrawGrid()
         }
         function changeBeatFenmu(self)
         {
+            // ... (保持不变)
             paiziSettings.fenmu = self.value
             updateGridCount()
             redrawGrid()
         }
         function changeSelectMode(self)
         {
+            // ... (保持不变)
             isRectSelectMode = self.checked
         }
         function copy()
         {
+            // ... (保持不变)
             if(selPatternIndex >=0 && pattern[selPatternIndex])
             {
                 copyedPatternData = {...pattern[selPatternIndex]}
@@ -669,6 +698,7 @@
         }
         function paste()
         {
+            // ... (保持不变)
             if(copyedPatternData)
             {
                 pattern[selPatternIndex] = {...copyedPatternData}
@@ -678,6 +708,7 @@
         }
         // 新增函数：处理选中音符的移动（单个或多个）
         function moveSelectedNotes(mouseX, mouseY, gridSpace) {
+            // ... (保持不变)
             // 计算鼠标的相对移动量
             var gridX = mouseX - keyWidth;
             var adjustedX = gridX - dragOffsetX;
@@ -699,6 +730,7 @@
         }
         // 移动单个音符
         function moveSingleNote(noteIndex, adjustedX, adjustedY, gridSpace) {
+            // ... (保持不变)
             // 限制X坐标范围
             if (adjustedX < 0) adjustedX = 0;
             if (adjustedX + seq[noteIndex].width > canvas.width - keyWidth) {
@@ -709,7 +741,7 @@
             seq[noteIndex].y = adjustedY; // 直接使用转换后的坐标
         }
 
-        // 移动多个音符 【修复】重写此函数，使用 dragNoteIndex 作为锚点
+        // 移动多个音符
         function moveMultipleNotes(adjustedX, adjustedY, gridSpace) {
             // adjustedX/Y 是 *dragNote* 的目标坐标 (X未吸附, Y已吸附)
             if (dragNoteIndex < 0 || !seq[dragNoteIndex]) return; // 安全检查
@@ -757,6 +789,60 @@
                 note.x += constrainedDeltaX;
                 note.y += deltaY; 
             }
+        }
+
+        // 【新增】拉伸选中的音符（单个或多个）
+        function stretchSelectedNotes(gridX, gridSpace) {
+            if (dragNoteIndex < 0) return; // 锚点音符不存在
+
+            const anchorNote = seq[dragNoteIndex];
+            
+            // 1. 根据锚点音符计算新的宽度 (应用网格吸附)
+            // gridX: 当前鼠标在音符区的 X 坐标
+            let newWidth = gridX - anchorNote.x + dragOffsetX;
+            
+            // 最小宽度限制为 1 个 gridSpace
+            newWidth = Math.max(gridSpace, newWidth); 
+
+            // 应用网格吸附
+            newWidth = Math.round(newWidth / gridSpace) * gridSpace;
+
+            // 2. 边界检查: 确保锚点音符不会超出画布右侧边界
+            const maxAllowedWidth = canvas.width - keyWidth - anchorNote.x;
+            newWidth = Math.min(newWidth, maxAllowedWidth);
+            
+            // 3. 计算宽度变化量（delta）
+            const widthDelta = newWidth - anchorNote.width;
+            
+            if (widthDelta === 0) return; // 没有变化
+
+            // 4. 应用新的宽度到所有选中的音符
+            let notesToStretch = [];
+            if (selectedNoteIndex >= 0 && selectedNoteIndices.length === 0) {
+                notesToStretch.push(selectedNoteIndex);
+            } else if (selectedNoteIndices.length > 0) {
+                notesToStretch = selectedNoteIndices;
+            } else {
+                return; // 没有音符被选中
+            }
+            
+            for (let i = 0; i < notesToStretch.length; i++) {
+                const noteIndex = notesToStretch[i];
+                const note = seq[noteIndex];
+                
+                // 所有选中的音符应用相同的宽度变化量
+                let finalNewWidth = note.width + widthDelta;
+                
+                // 再次进行边界检查（确保其他音符也不会超出）
+                const maxIndividualAllowedWidth = canvas.width - keyWidth - note.x;
+                finalNewWidth = Math.min(finalNewWidth, maxIndividualAllowedWidth);
+                finalNewWidth = Math.max(gridSpace, finalNewWidth); // 最小宽度
+                
+                note.width = finalNewWidth;
+            }
+            
+            pattern[selPatternIndex].seq = [...seq];
+            redraw();
         }
     </script>
 </body>
