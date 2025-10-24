@@ -85,6 +85,7 @@
         var isNoteStretch = false
         var isMouseDown = false
         var isStretching = false
+        var dragNoteIndex = -1; // 【修复】新增：正在拖动的音符索引
         document.addEventListener('contextmenu',function(e)
         {
             e.preventDefault();
@@ -327,6 +328,7 @@
             {
                 seq.splice(selectedNoteIndex, 1);
                 selectedNoteIndex = -1
+                dragNoteIndex = -1; // 【修复】删除时重置
                 console.log(seq)
                 pattern[selPatternIndex].seq = [...seq]
             }
@@ -356,6 +358,7 @@
                     // 清除之前的选择
                     selectedNoteIndex = -1;
                     selectedNoteIndices = [];
+                    dragNoteIndex = -1; // 【修复】清空拖动索引
                 }
                 redraw();
                 return;
@@ -367,31 +370,44 @@
                 dragOffsetX = gridX - (seq[selectedNoteIndex].x + seq[selectedNoteIndex].width);
                 return
             }
-            // 检测按下的地方是否在音符内
+            // 【修复】重写音符命中逻辑
             var hitResult = hitTest(x, y);
             if(hitResult && hitResult.hit)
             {
-                // 如果按住Ctrl键，进行多选
+                const clickedNoteIndex = hitResult.index;
+                const clickedNoteAlreadySelected = selectedNoteIndices.includes(clickedNoteIndex);
+                dragNoteIndex = -1; // 默认不拖动
+
                 if (e.ctrlKey) {
-                    if (selectedNoteIndices.includes(hitResult.index)) {
-                        // 如果已经选中，则取消选择
-                        selectedNoteIndices = selectedNoteIndices.filter(index => index !== hitResult.index);
+                    // Ctrl-click: 切换选择
+                    if (clickedNoteAlreadySelected) {
+                        selectedNoteIndices = selectedNoteIndices.filter(index => index !== clickedNoteIndex);
                     } else {
-                        // 添加到选中列表
-                        selectedNoteIndices.push(hitResult.index);
+                        selectedNoteIndices.push(clickedNoteIndex);
                     }
-                    selectedNoteIndex = -1; // 清除单选
+                    selectedNoteIndex = -1; // 确保关闭单选
+                } else if (clickedNoteAlreadySelected) {
+                    // 点击一个已经被多选的音符: 准备拖动所有
+                    selectedNoteIndex = -1; // 关闭单选
+                    dragNoteIndex = clickedNoteIndex; // 记录我们正在拖动这个音符
                 } else {
-                    // 单选模式
-                    selectedNoteIndex = hitResult.index;
-                    selectedNoteIndices = []; // 清除多选
+                    // 标准的单击一个新音符
+                    selectedNoteIndex = clickedNoteIndex;
+                    dragNoteIndex = clickedNoteIndex; // 记录我们正在拖动这个音符
+                    selectedNoteIndices = []; // 清空多选
                 }
-                dragOffsetX = gridX - seq[selectedNoteIndex].x;
-                dragOffsetY = y - (musicToCanvasY(seq[selectedNoteIndex].y) - scrollOffset);
+                
+                // 计算拖动偏移量 (如果准备拖动)
+                if (dragNoteIndex >= 0) { 
+                    var dragNote = seq[dragNoteIndex];
+                    dragOffsetX = gridX - dragNote.x;
+                    dragOffsetY = y - (musicToCanvasY(dragNote.y) - scrollOffset);
+                }
             }
             else{
                 selectedNoteIndex = -1
                 selectedNoteIndices = []; // 清除多选
+                dragNoteIndex = -1; // 【修复】清空拖动索引
                 if(x >= keyWidth && x < canvas.width)
                 {
                     var grid_space = all_note_width / grid
@@ -428,7 +444,6 @@
                 for (let i = 0; i < seq.length; i++) {
                     if (isNoteInRectSelection(i)) {
                         selectedNoteIndices.push(i);
-                        console.log(selectedNoteIndices)
                     }
                 }
                 
@@ -436,7 +451,8 @@
                 return;
             }
             
-            if(selectedNoteIndex >= 0 && isMouseDown)
+            // 【修复】拖动条件：检查 dragNoteIndex
+            if ((selectedNoteIndex >= 0 || selectedNoteIndices.length > 0) && isMouseDown && dragNoteIndex >= 0)
             {
                 var gridSpace = all_note_width / grid
                 if(isStretching)
@@ -457,26 +473,6 @@
                 }
                 else{
                     moveSelectedNotes(x,y,gridSpace)
-                   /* var adjustedX = gridX - dragOffsetX
-                    // 修复音符移动逻辑：同样先吸附画布Y坐标，再转换
-                    var canvasY_top_abs = (y - dragOffsetY) + scrollOffset;
-                    var canvasY_snapped = snap(canvasY_top_abs, note_height);
-                    var adjustedY_snapped = canvasToMusicY(canvasY_snapped);
-
-                    if(adjustedX < 0)
-                    {
-                        adjustedX = 0
-                    }
-                    
-                    // 限制音符右边界不超出画布
-                    if(adjustedX + seq[selectedNoteIndex].width > canvas.width - keyWidth) {
-                        adjustedX = canvas.width - keyWidth - seq[selectedNoteIndex].width;
-                    }
-                    
-                    seq[selectedNoteIndex].x = snap(adjustedX,gridSpace)
-                    seq[selectedNoteIndex].y = adjustedY_snapped // 直接使用转换后的坐标
-                    pattern[selPatternIndex].seq = [...seq]
-                    redraw();*/
                 }
             }
         })
@@ -484,14 +480,20 @@
         {
             isMouseDown = false
             isStretching = false
+            dragNoteIndex = -1; // 【修复】抬起鼠标时重置拖动索引
             
             // 完成框选
             if (isRectSelecting) {
                 isRectSelecting = false;
-                isRectSelectMode = false
-                RectSelect.checked = false
-                redraw();
                 
+                // 如果有选中的音符，确保单选模式关闭
+                if (selectedNoteIndices.length > 0) {
+                    selectedNoteIndex = -1; 
+                }
+                
+                // 【修复】移除框选结束后设置 dragOffsetX/Y 的代码，让下次 mousedown 处理拖动逻辑
+                
+                redraw();
             }
         });
         function clamp(value,min,max)
@@ -684,7 +686,7 @@
             var canvasY_snapped = snap(canvasY_top_abs, note_height);
             var adjustedY_snapped = canvasToMusicY(canvasY_snapped);
             
-            // 如果是单个音符选中
+            // 如果是单个音符选中 (或处于单选拖动状态)
             if (selectedNoteIndex >= 0 && selectedNoteIndices.length === 0) {
                 moveSingleNote(selectedNoteIndex, adjustedX, adjustedY_snapped, gridSpace);
             } 
@@ -692,7 +694,6 @@
             else if (selectedNoteIndices.length > 0) {
                 moveMultipleNotes(adjustedX, adjustedY_snapped, gridSpace);
             }
-            console.log(selectedNoteIndices)
             pattern[selPatternIndex].seq = [...seq];
             redraw();
         }
@@ -708,31 +709,53 @@
             seq[noteIndex].y = adjustedY; // 直接使用转换后的坐标
         }
 
-        // 移动多个音符
+        // 移动多个音符 【修复】重写此函数，使用 dragNoteIndex 作为锚点
         function moveMultipleNotes(adjustedX, adjustedY, gridSpace) {
-            // 计算第一个选中音符的原始位置和新位置的偏移量
-            const firstNote = seq[selectedNoteIndices[0]];
-            const offsetX = adjustedX - firstNote.x;
-            const offsetY = adjustedY - firstNote.y;
+            // adjustedX/Y 是 *dragNote* 的目标坐标 (X未吸附, Y已吸附)
+            if (dragNoteIndex < 0 || !seq[dragNoteIndex]) return; // 安全检查
             
-            // 移动所有选中的音符
+            const dragNote = seq[dragNoteIndex];
+            // 计算锚点音符的目标 X (吸附后)
+            const snappedTargetX = snap(adjustedX, gridSpace);
+            
+            // 计算 *吸附后* 的增量 (delta)
+            const deltaX = snappedTargetX - dragNote.x;
+            const deltaY = adjustedY - dragNote.y; // adjustedY 已经吸附
+
+            if (deltaX === 0 && deltaY === 0) return; // 没有移动
+
+            // --- 边界检查 ---
+            // 1. 找到所有选中音符的当前边界
+            let minNoteX = Infinity;
+            let maxNoteX = -Infinity;
+            
+            for (let i = 0; i < selectedNoteIndices.length; i++) {
+                const note = seq[selectedNoteIndices[i]];
+                if (note.x < minNoteX) minNoteX = note.x;
+                if (note.x + note.width > maxNoteX) maxNoteX = note.x + note.width;
+            }
+
+            // 2. 计算受限的 deltaX
+            let constrainedDeltaX = deltaX;
+            const minCanvasX = 0; // x=0 (相对于音符区)
+            const maxCanvasX = canvas.width - keyWidth;
+
+            if (minNoteX + deltaX < minCanvasX) {
+                // 撞到左墙
+                constrainedDeltaX = minCanvasX - minNoteX;
+            }
+            if (maxNoteX + deltaX > maxCanvasX) {
+                // 撞到右墙
+                constrainedDeltaX = maxCanvasX - maxNoteX;
+            }
+            
+            // 3. 应用受限的增量到所有选中的音符
             for (let i = 0; i < selectedNoteIndices.length; i++) {
                 const noteIndex = selectedNoteIndices[i];
                 const note = seq[noteIndex];
                 
-                // 计算新位置
-                let newX = note.x + offsetX;
-                let newY = note.y + offsetY;
-                
-                // 限制X坐标范围
-                if (newX < 0) newX = 0;
-                if (newX + note.width > canvas.width - keyWidth) {
-                    newX = canvas.width - keyWidth - note.width;
-                }
-                
-                // 应用网格对齐
-                note.x = snap(newX, gridSpace);
-                note.y = newY;
+                note.x += constrainedDeltaX;
+                note.y += deltaY; 
             }
         }
     </script>
