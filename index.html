@@ -12,6 +12,13 @@
     </style>
 </head>
 <body>
+    拍号设置(分子/分母)<input class="piazi" type="number" min="1" value="4" onchange="changeBeatFenzi(this)">
+    <input class="piazi" type="number" min="1" value="4" onchange="changeBeatFenmu(this)">
+    乐器选择
+    <select>
+        <option value="piano">钢琴</option>
+        <option value="guitar">吉他</option>
+    </select>
     <div>吸附单位选择
         <select onchange="changeGrid(this.value)">
             <option value="1">1/1(节拍)</option>
@@ -27,23 +34,20 @@
             <option value="24">1/24（三连音）</option>
             <option value="48">1/48（三连音）</option>
         </select>
-        乐器选择
-        <select>
-            <option value="piano">钢琴</option>
-            <option value="guitar">吉他</option>
-        </select>
+       
         拉伸音符<input type="checkbox" onchange="changeStretch(this)">
         框选<input id="rect-select" type="checkbox" onchange="changeSelectMode(this)"/>
-        <button onclick="delSelPattern()">清空选中的旋律片段</button>
-        <button onclick="delSelNote()">删除选中的音符</button>
-        拍号设置(分子/分母)<input class="piazi" type="number" min="1" value="4" onchange="changeBeatFenzi(this)">
-        <input class="piazi" type="number" min="1" value="4" onchange="changeBeatFenmu(this)">
+        <button onclick="copy()">复制</button>
+        <button onclick="paste()">粘贴</button>
+        <button onclick="delSelPattern()">清空</button>
+        <button onclick="delSelNote()">删除选中</button>
     </div>
     <div id="pattern-list" style="width: 800px;overflow-y: auto;white-space: nowrap;">旋律片段</div>
     <canvas id="piano-roll" width="864" height="384"></canvas>
     <canvas id="vertical-scrollbar" width="40" height="384"></canvas>
     <script>
         // todo：完成项目后换成testPlugin()这种风格命名变量和函数
+        var copyedPatternData 
         var paiziSettings = {"fenzi":4, "fenmu":4}
         //框选工具
         const RectSelect = document.getElementById('rect-select');
@@ -118,8 +122,6 @@
         {
             full_keyboard_map.push(...melody_scale)
         }
-        
-        
         function initUI()
         {
             for(var i = 0; i < 512; i++)
@@ -591,6 +593,7 @@
             var btn = document.createElement('button')
             btn.innerHTML = pattern.length
             btn.onclick = function(){selPattern(btn)}
+            //btn.oncontextmenu = function(){onPatternRightClick(btn)}
             PatternList.appendChild(btn)
         }
         function delSelPattern()
@@ -652,6 +655,22 @@
         function changeSelectMode(self)
         {
             isRectSelectMode = self.checked
+        }
+        function copy()
+        {
+            if(selPatternIndex >=0 && pattern[selPatternIndex])
+            {
+                copyedPatternData = {...pattern[selPatternIndex]}
+            }
+        }
+        function paste()
+        {
+            if(copyedPatternData)
+            {
+                pattern[selPatternIndex] = {...copyedPatternData}
+                seq = [...pattern[selPatternIndex].seq]
+                redraw()
+            }
         }
     </script>
 </body>
